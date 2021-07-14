@@ -1,0 +1,105 @@
+#=======================================
+# Overview
+#=======================================
+"""
+This code sample takes an HHS public dataset of COVID-19 PCR test data, performs transformations to generate additional important variables,
+and creates time series visualizations for states specified by the user.
+
+Please download the dataset as a CSV file from https://healthdata.gov/dataset/COVID-19-Diagnostic-Laboratory-Testing-PCR-Testing/j8mb-icvb
+"""
+
+#=======================================
+# Import modules
+#=======================================
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+from datetime import datetime
+sns.set()
+
+#=======================================
+# Function definitions
+#=======================================
+def loadDataframe():
+    r"""
+    Reads a CSV file and returns a dataframe. The file name should include the path.
+    Ex. C:\Users\apost\OneDrive\Desktop\HHS\Data_Science\COVID-19_Diagnostic_Laboratory_Testing__PCR_Testing__Time_Series.csv
+    """
+    filename = input("Please input the file name, including the path, of the CSV dataset")
+    df = pd.read_csv(filename, parse_dates = ['date'])
+    
+    return df
+ 
+def pivot(df):
+    """
+    Creates and retuns a pivot table of the original dataframe.
+
+    Keyword arguments:
+    df -- Pandas dataframe
+    """
+    table = df.pivot(index = ["state", "state_name", "state_fips", "fema_region", "date"],
+                     columns = ["overall_outcome"], values = ["new_results_reported", "total_results_reported"])
+
+    return table
+
+def transform(table):
+    """
+    Creates new variables and exports the transformed dataset as a new dataframe.
+
+    Keyword arguments:
+    table -- Pandas dataframe
+    """
+    col_names = ["state", "state_name", "state_fips", "fema_region", "date", "new_inconclusive_results", "new_negative_results",
+             "new_positive_results", "cumulative_inconclusive_results","cumulative_negative_results",
+             "cumulative_positive_results"]
+    
+    table.reset_index(inplace = True)
+    table.columns = col_names
+    table["total_new_results"] = table.new_inconclusive_results + table.new_negative_results + table.new_positive_results
+    table["total_cumulative_results"] = table.cumulative_inconclusive_results + table.cumulative_negative_results + table.cumulative_positive_results
+    table.loc[table.new_positive_results + table.new_negative_results != 0, "positivity_rate"] = 100*table.new_positive_results/(table.new_positive_results+table.new_negative_results)
+    table.sort_values(by = ["state", "date"], ascending = (True, True), inplace = True)
+    table = table[["state", "state_name", "state_fips", "fema_region", "date", "new_inconclusive_results", "new_negative_results", "new_positive_results", "total_new_results",
+                   "cumulative_inconclusive_results", "cumulative_negative_results", "cumulative_positive_results", "total_cumulative_results", "positivity_rate"]]
+
+    return table
+
+def plot(table):
+    """
+    Creates time series plots of new COVID test results, cumulative test results, and the positivity rate for a state specified by the user.
+
+    Keyword arguments:
+    table -- Pandas dataframe
+    """
+    sns.color_palette("dark")
+    proceed = "Y"
+    
+    while proceed == "Y":
+        plt.clf()
+        state = input("Please enter a state abbreviation (ex. Type 'NY' for New York):")
+        fig, axes = plt.subplots(nrows = 3)
+    
+        temp = table[table.state == state]
+        temp = temp.set_index("date")
+        temp.sort_index(inplace = True)
+        temp = temp.dropna()
+    
+        sns.lineplot(x = temp.index, y = 'total_new_results', data = temp, ax = axes[0])
+        sns.lineplot(x = temp.index, y = 'total_cumulative_results', data = temp, ax = axes[1])
+        sns.lineplot(x = temp.index, y = 'positivity_rate', data = temp, ax = axes[2])
+
+        axes[0].set(xlabel = "Date", ylabel = "Number of Results", title = "Total Number of New Test Results in " + state)
+        axes[1].set(xlabel = "Date", ylabel = "Number of Results", title = "Total Number of Cumulative Test Results in " + state)
+        axes[2].set(xlabel = "Date", ylabel = "Rate (in %)", title = "COVID-19 Positivity Rate in " + state)
+
+        plt.show()
+        proceed = input("Please type 'Y' to continue or type 'N' to exit.")
+
+#=======================================
+# Function calls
+#=======================================
+df = loadDataframe()
+table = pivot(df)
+table = transform(table)
+plot(table)
